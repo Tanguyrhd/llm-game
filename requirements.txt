@@ -1,0 +1,35 @@
+# --- Core dependencies ---
+fastapi==0.139.2          # web framework
+uvicorn==0.51.0           # ASGI server that runs FastAPI
+httpx==0.28.1              # HTTP client used to call the local Ollama server
+python-dotenv==1.2.2       # loads env vars from .env (e.g. OLLAMA_MODEL, OLLAMA_HOST)
+
+# --- fastapi ---
+starlette==1.3.1           # ASGI toolkit FastAPI is built on
+pydantic==2.13.4           # request/response validation and serialization
+pydantic_core==2.46.4
+typing-inspection==0.4.2
+annotated-types==0.7.0
+annotated-doc==0.0.4
+
+# --- uvicorn[standard] extras ---
+click==8.4.2               # CLI entrypoint
+h11==0.16.0                # HTTP/1.1 protocol implementation
+httptools==0.8.0           # fast HTTP parser
+websockets==16.1           # WebSocket support (unused for now, kept for future realtime features)
+watchfiles==1.2.0          # auto-reload in dev
+uvloop==0.22.1             # faster asyncio event loop
+PyYAML==6.0.3               # uvicorn[standard] config support
+
+# --- httpx client stack ---
+httpcore==1.0.9
+anyio==4.14.2
+sniffio==1.3.1
+
+# --- shared utilities (SSL, encoding, typing) ---
+certifi==2026.6.17
+idna==3.18
+typing_extensions==4.16.0
+
+# Generated via `pip freeze`; running `pip freeze > requirements.txt` again
+# will flatten this back to a single alphabetical list without comments.

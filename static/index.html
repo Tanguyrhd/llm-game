@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Prompt Heist — The Secret Keeper</title>
+<style>
+  body {
+    font-family: system-ui, sans-serif;
+    max-width: 640px;
+    margin: 2rem auto;
+    padding: 0 1rem;
+    background: #0f1115;
+    color: #e6e6e6;
+  }
+  h1 { font-size: 1.4rem; }
+  #briefing {
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+    background: #161a22;
+  }
+  #briefing p { margin: 0.4rem 0; }
+  #objective { color: #7fd6ff; }
+  #messages {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    min-height: 200px;
+    margin-bottom: 1rem;
+  }
+  .msg {
+    padding: 0.5rem 0.75rem;
+    border-radius: 8px;
+    max-width: 80%;
+    white-space: pre-wrap;
+  }
+  .msg.user { align-self: flex-end; background: #2a4d7a; }
+  .msg.assistant { align-self: flex-start; background: #262a33; }
+  .msg.error { align-self: center; background: #5a2a2a; font-style: italic; }
+  #success-banner {
+    display: none;
+    border: 1px solid #3fae5a;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    background: #16281c;
+  }
+  #explain-status {
+    display: none;
+    font-style: italic;
+    color: #9aa0a8;
+  }
+  #chat-form { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; }
+  #chat-input {
+    flex: 1;
+    padding: 0.5rem;
+    border-radius: 6px;
+    border: 1px solid #333;
+    background: #1a1e26;
+    color: inherit;
+  }
+  #chat-form button {
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    border: none;
+    background: #2f6fdb;
+    color: white;
+    cursor: pointer;
+  }
+  #chat-form button:disabled { opacity: 0.5; cursor: not-allowed; }
+  #hints-panel {
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 1rem;
+    background: #161a22;
+  }
+  #hint-button {
+    padding: 0.4rem 0.8rem;
+    border-radius: 6px;
+    border: 1px solid #555;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+  }
+  .hint {
+    margin-top: 0.6rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 6px;
+    background: #262a33;
+  }
+  .hint.answer { background: #2a2416; border: 1px solid #a88b2e; }
+</style>
+</head>
+<body>
+  <div id="briefing">
+    <h1 id="title">Loading mission…</h1>
+    <p id="story"></p>
+    <p id="objective"></p>
+  </div>
+
+  <div id="messages"></div>
+
+  <div id="success-banner">
+    <strong>Mission complete.</strong>
+    <p id="success-explanation"></p>
+    <p id="explain-status">Analyzing your technique…</p>
+  </div>
+
+  <form id="chat-form">
+    <input id="chat-input" type="text" placeholder="Type a message…" autocomplete="off" />
+    <button type="submit">Send</button>
+  </form>
+
+  <div id="hints-panel">
+    <button id="hint-button" type="button">Show hint 1</button>
+    <div id="hint-list"></div>
+  </div>
+
+<script>
+  const history = [];
+  let missionSolved = false;
+  let hintStage = 0;
+  let missionHints = [];
+  let missionAnswer = '';
+
+  const messagesEl = document.getElementById('messages');
+  const formEl = document.getElementById('chat-form');
+  const inputEl = document.getElementById('chat-input');
+  const bannerEl = document.getElementById('success-banner');
+  const explanationEl = document.getElementById('success-explanation');
+  const explainStatusEl = document.getElementById('explain-status');
+  const hintsPanelEl = document.getElementById('hints-panel');
+  const hintButtonEl = document.getElementById('hint-button');
+  const hintListEl = document.getElementById('hint-list');
+
+  function addMessage(role, content) {
+    const div = document.createElement('div');
+    div.className = `msg ${role}`;
+    div.textContent = content;
+    messagesEl.appendChild(div);
+    div.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }
+
+  async function loadMission() {
+    const res = await fetch('/api/mission');
+    const mission = await res.json();
+    document.getElementById('title').textContent = mission.title;
+    document.getElementById('story').textContent = mission.story;
+    document.getElementById('objective').textContent = 'Objective: ' + mission.objective;
+    missionHints = mission.hints;
+    missionAnswer = mission.answer_example;
+    renderHintButton();
+  }
+
+  function renderHintButton() {
+    const labels = ['Show hint 1', 'Show hint 2', 'Show hint 3', 'Show answer'];
+    if (hintStage >= labels.length) {
+      hintButtonEl.style.display = 'none';
+      return;
+    }
+    hintButtonEl.textContent = labels[hintStage];
+  }
+
+  hintButtonEl.addEventListener('click', () => {
+    const div = document.createElement('div');
+    if (hintStage < missionHints.length) {
+      div.className = 'hint';
+      div.textContent = `Hint ${hintStage + 1}: ${missionHints[hintStage]}`;
+    } else {
+      div.className = 'hint answer';
+      div.textContent = `Answer: ${missionAnswer}`;
+    }
+    hintListEl.appendChild(div);
+    hintStage += 1;
+    renderHintButton();
+  });
+
+  async function sendMessage(message) {
+    history.push({ role: 'user', content: message });
+    addMessage('user', message);
+
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ history: history.slice(0, -1), message }),
+    });
+
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      addMessage('error', body.detail || `Error: ${res.status}`);
+      return;
+    }
+
+    const data = await res.json();
+    history.push({ role: 'assistant', content: data.reply });
+    addMessage('assistant', data.reply);
+
+    if (data.success) {
+      missionSolved = true;
+      explanationEl.textContent = data.explanation;
+      bannerEl.style.display = 'block';
+      bannerEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      inputEl.disabled = true;
+      formEl.querySelector('button').disabled = true;
+      hintsPanelEl.style.display = 'none';
+      fetchTailoredExplanation(message);
+    }
+  }
+
+  async function fetchTailoredExplanation(winningMessage) {
+    explainStatusEl.style.display = 'block';
+    try {
+      const res = await fetch('/api/explain', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: winningMessage }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        explanationEl.textContent = data.explanation;
+      }
+    } catch {
+      // keep the generic explanation already shown
+    } finally {
+      explainStatusEl.style.display = 'none';
+    }
+  }
+
+  formEl.addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (missionSolved) return;
+    const message = inputEl.value.trim();
+    if (!message) return;
+    inputEl.value = '';
+    sendMessage(message);
+  });
+
+  loadMission();
+</script>
+</body>
+</html>
