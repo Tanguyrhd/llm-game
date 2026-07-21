@@ -273,7 +273,6 @@
           history.push({ role: 'assistant', content: reply });
           if (event.success) {
             missionSolved = true;
-            explanationEl.textContent = event.explanation;
             bannerEl.style.display = 'block';
             bannerEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
             inputEl.disabled = true;

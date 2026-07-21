@@ -110,13 +110,7 @@ def post_chat(mission_id: str, req: ChatRequest) -> StreamingResponse:
             return
 
         success = detect_secret_leak("".join(reply_parts), mission.secret)
-        yield json.dumps(
-            {
-                "type": "done",
-                "success": success,
-                "explanation": mission.success_explanation if success else None,
-            }
-        ) + "\n"
+        yield json.dumps({"type": "done", "success": success}) + "\n"
 
     return StreamingResponse(event_stream(), media_type="application/x-ndjson")
 
@@ -127,10 +121,10 @@ class ExplainRequest(BaseModel):
 
 @app.post("/api/explain/{mission_id}")
 def post_explain(mission_id: str, req: ExplainRequest) -> StreamingResponse:
-    mission = _get_mission_or_404(mission_id)
+    _get_mission_or_404(mission_id)
 
     def event_stream():
-        for chunk in stream_explain_success(mission, req.message):
+        for chunk in stream_explain_success(req.message):
             yield json.dumps({"type": "chunk", "content": chunk}) + "\n"
         yield json.dumps({"type": "done"}) + "\n"
 
