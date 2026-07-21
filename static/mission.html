@@ -35,8 +35,13 @@
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
-    min-height: 200px;
+    height: 45vh;
+    overflow-y: auto;
     margin-bottom: 1rem;
+    padding: 0.75rem;
+    border: 1px solid #333;
+    border-radius: 8px;
+    background: #0c0e12;
   }
   .msg {
     padding: 0.5rem 0.75rem;
@@ -149,12 +154,23 @@
   const hintListEl = document.getElementById('hint-list');
   const difficultySelectEl = document.getElementById('difficulty-select');
 
+  function isNearBottom() {
+    return messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 80;
+  }
+
+  function scrollToBottom() {
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
   function addMessage(role, content) {
+    const shouldStick = isNearBottom();
     const div = document.createElement('div');
     div.className = `msg ${role}`;
     div.textContent = content;
     messagesEl.appendChild(div);
-    div.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    if (shouldStick) {
+      scrollToBottom();
+    }
   }
 
   const groupId = new URLSearchParams(window.location.search).get('mission') || 'secret-keeper';
@@ -251,19 +267,52 @@
       return;
     }
 
-    const data = await res.json();
-    history.push({ role: 'assistant', content: data.reply });
-    addMessage('assistant', data.reply);
+    const assistantEl = document.createElement('div');
+    assistantEl.className = 'msg assistant';
+    messagesEl.appendChild(assistantEl);
 
-    if (data.success) {
-      missionSolved = true;
-      explanationEl.textContent = data.explanation;
-      bannerEl.style.display = 'block';
-      bannerEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      inputEl.disabled = true;
-      formEl.querySelector('button').disabled = true;
-      hintsPanelEl.style.display = 'none';
-      fetchTailoredExplanation(message);
+    let reply = '';
+    let buffer = '';
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+
+      for (const line of lines) {
+        if (!line) continue;
+        const event = JSON.parse(line);
+
+        if (event.type === 'chunk') {
+          const shouldStick = isNearBottom();
+          reply += event.content;
+          assistantEl.textContent = reply;
+          if (shouldStick) {
+            scrollToBottom();
+          }
+        } else if (event.type === 'error') {
+          assistantEl.remove();
+          addMessage('error', event.detail);
+          return;
+        } else if (event.type === 'done') {
+          history.push({ role: 'assistant', content: reply });
+          if (event.success) {
+            missionSolved = true;
+            explanationEl.textContent = event.explanation;
+            bannerEl.style.display = 'block';
+            bannerEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            inputEl.disabled = true;
+            formEl.querySelector('button').disabled = true;
+            hintsPanelEl.style.display = 'none';
+            fetchTailoredExplanation(message);
+          }
+        }
+      }
     }
   }
 
@@ -275,9 +324,35 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: winningMessage }),
       });
-      if (res.ok) {
-        const data = await res.json();
-        explanationEl.textContent = data.explanation;
+      if (!res.ok) return;
+
+      let explanation = '';
+      let buffer = '';
+      let firstChunk = true;
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+
+        for (const line of lines) {
+          if (!line) continue;
+          const event = JSON.parse(line);
+          if (event.type === 'chunk') {
+            if (firstChunk) {
+              explanation = '';
+              explainStatusEl.style.display = 'none';
+              firstChunk = false;
+            }
+            explanation += event.content;
+            explanationEl.textContent = explanation;
+          }
+        }
       }
     } catch {
       // keep the generic explanation already shown

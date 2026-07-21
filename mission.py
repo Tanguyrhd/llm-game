@@ -1,6 +1,7 @@
+from collections.abc import Iterator
 from dataclasses import dataclass
 
-from llm import OllamaError, ask_llm
+from llm import OllamaError, stream_llm
 
 
 @dataclass(frozen=True)
@@ -225,9 +226,9 @@ ANALYST_SYSTEM_PROMPT = (
 )
 
 
-def explain_success(mission: Mission, winning_message: str) -> str:
+def stream_explain_success(mission: Mission, winning_message: str) -> Iterator[str]:
     try:
-        return ask_llm(
+        yield from stream_llm(
             [
                 {"role": "system", "content": ANALYST_SYSTEM_PROMPT},
                 {
@@ -237,4 +238,4 @@ def explain_success(mission: Mission, winning_message: str) -> str:
             ]
         )
     except OllamaError:
-        return mission.success_explanation
+        yield mission.success_explanation

@@ -1,11 +1,13 @@
+import json
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from llm import OllamaError, ask_llm
-from mission import MISSIONS, Mission, detect_secret_leak, explain_success
+from llm import OllamaError, stream_llm
+from mission import MISSIONS, Mission, detect_secret_leak, stream_explain_success
 
 app = FastAPI()
 
@@ -88,14 +90,8 @@ class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=2000)
 
 
-class ChatResponse(BaseModel):
-    reply: str
-    success: bool
-    explanation: str | None = None
-
-
 @app.post("/api/chat/{mission_id}")
-def post_chat(mission_id: str, req: ChatRequest) -> ChatResponse:
+def post_chat(mission_id: str, req: ChatRequest) -> StreamingResponse:
     mission = _get_mission_or_404(mission_id)
     messages = (
         [{"role": "system", "content": mission.system_prompt}]
@@ -103,31 +99,42 @@ def post_chat(mission_id: str, req: ChatRequest) -> ChatResponse:
         + [{"role": "user", "content": req.message}]
     )
 
-    try:
-        reply = ask_llm(messages)
-    except OllamaError as e:
-        raise HTTPException(status_code=503, detail=str(e)) from e
+    def event_stream():
+        reply_parts: list[str] = []
+        try:
+            for chunk in stream_llm(messages):
+                reply_parts.append(chunk)
+                yield json.dumps({"type": "chunk", "content": chunk}) + "\n"
+        except OllamaError as e:
+            yield json.dumps({"type": "error", "detail": str(e)}) + "\n"
+            return
 
-    success = detect_secret_leak(reply, mission.secret)
-    return ChatResponse(
-        reply=reply,
-        success=success,
-        explanation=mission.success_explanation if success else None,
-    )
+        success = detect_secret_leak("".join(reply_parts), mission.secret)
+        yield json.dumps(
+            {
+                "type": "done",
+                "success": success,
+                "explanation": mission.success_explanation if success else None,
+            }
+        ) + "\n"
+
+    return StreamingResponse(event_stream(), media_type="application/x-ndjson")
 
 
 class ExplainRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=2000)
 
 
-class ExplainResponse(BaseModel):
-    explanation: str
-
-
 @app.post("/api/explain/{mission_id}")
-def post_explain(mission_id: str, req: ExplainRequest) -> ExplainResponse:
+def post_explain(mission_id: str, req: ExplainRequest) -> StreamingResponse:
     mission = _get_mission_or_404(mission_id)
-    return ExplainResponse(explanation=explain_success(mission, req.message))
+
+    def event_stream():
+        for chunk in stream_explain_success(mission, req.message):
+            yield json.dumps({"type": "chunk", "content": chunk}) + "\n"
+        yield json.dumps({"type": "done"}) + "\n"
+
+    return StreamingResponse(event_stream(), media_type="application/x-ndjson")
 
 
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
