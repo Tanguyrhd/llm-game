@@ -121,10 +121,10 @@ class ExplainRequest(BaseModel):
 
 @app.post("/api/explain/{mission_id}")
 def post_explain(mission_id: str, req: ExplainRequest) -> StreamingResponse:
-    _get_mission_or_404(mission_id)
+    mission = _get_mission_or_404(mission_id)
 
     def event_stream():
-        for chunk in stream_explain_success(req.message):
+        for chunk in stream_explain_success(mission, req.message):
             yield json.dumps({"type": "chunk", "content": chunk}) + "\n"
         yield json.dumps({"type": "done"}) + "\n"
 

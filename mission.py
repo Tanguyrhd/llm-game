@@ -202,25 +202,32 @@ def detect_secret_leak(reply_text: str, secret: str) -> bool:
 
 ANALYST_SYSTEM_PROMPT = (
     "You are a security analyst explaining LLM manipulation techniques to a "
-    "student in an educational game. You'll be shown the message that "
-    "successfully tricked an AI into breaking a rule it was given. Write a "
+    "student in an educational game. You'll be shown the exact rules (system "
+    "prompt) an AI was given to protect a secret, and the message that "
+    "successfully tricked it into breaking those specific rules. Write a "
     "specific 2-3 sentence explanation of which technique(s) were used (e.g. "
     "authority impersonation, fake system override, instruction-hierarchy "
     "confusion, context dilution/recency bias, roleplay/fictional framing, "
-    "encoding evasion) and why it worked, quoting short phrases from the "
-    "message. Be concrete, not generic. Do not repeat the protected secret "
-    "or phrase itself."
+    "encoding evasion, or simply the absence of any protective rule) and why "
+    "it worked *against these particular rules*, quoting short phrases from "
+    "the winning message. Be concrete, not generic — if the rules were weak "
+    "or missing entirely, say so instead of inventing a technique. Do not "
+    "repeat the protected secret or phrase itself."
 )
 
 
-def stream_explain_success(winning_message: str) -> Iterator[str]:
+def stream_explain_success(mission: Mission, winning_message: str) -> Iterator[str]:
     try:
         yield from stream_llm(
             [
                 {"role": "system", "content": ANALYST_SYSTEM_PROMPT},
                 {
                     "role": "user",
-                    "content": f'The winning message was:\n"{winning_message}"',
+                    "content": (
+                        f'Mission: "{mission.title}"\n'
+                        f'The AI\'s rules were:\n"""{mission.system_prompt}"""\n\n'
+                        f'The winning message was:\n"{winning_message}"'
+                    ),
                 },
             ]
         )
