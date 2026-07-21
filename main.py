@@ -47,6 +47,37 @@ def get_mission(mission_id: str) -> MissionBriefing:
     return _briefing(_get_mission_or_404(mission_id))
 
 
+class DifficultyBriefing(MissionBriefing):
+    difficulty: str | None
+
+
+class MissionGroup(BaseModel):
+    id: str
+    title: str
+    difficulties: list[DifficultyBriefing]
+
+
+@app.get("/api/mission-groups")
+def list_mission_groups() -> list[MissionGroup]:
+    groups: dict[str, list[Mission]] = {}
+    for mission in MISSIONS.values():
+        groups.setdefault(mission.group, []).append(mission)
+
+    return [
+        MissionGroup(
+            id=group_id,
+            title=members[0].group_title,
+            difficulties=[
+                DifficultyBriefing(
+                    **_briefing(m).model_dump(), difficulty=m.difficulty
+                )
+                for m in members
+            ],
+        )
+        for group_id, members in groups.items()
+    ]
+
+
 class ChatMessage(BaseModel):
     role: Literal["user", "assistant"]
     content: str

@@ -14,8 +14,14 @@ def ask_llm(messages: list[dict]) -> str:
     try:
         resp = httpx.post(
             f"{OLLAMA_HOST}/api/chat",
-            json={"model": OLLAMA_MODEL, "messages": messages, "stream": False},
-            timeout=httpx.Timeout(connect=5.0, read=60.0, write=10.0, pool=5.0),
+            json={
+                "model": OLLAMA_MODEL,
+                "messages": messages,
+                "stream": False,
+                "keep_alive": -1,
+                "options": {"num_predict": 300},
+            },
+            timeout=httpx.Timeout(connect=5.0, read=150.0, write=10.0, pool=5.0),
         )
     except httpx.ConnectError as e:
         raise OllamaError(

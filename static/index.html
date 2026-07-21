@@ -43,14 +43,15 @@
 <script>
   async function loadMissions() {
     const container = document.getElementById('missions');
-    const res = await fetch('/api/missions');
-    const missions = await res.json();
+    const res = await fetch('/api/mission-groups');
+    const groups = await res.json();
     container.innerHTML = '';
-    for (const mission of missions) {
+    for (const group of groups) {
+      const defaultMission = group.difficulties[0];
       const link = document.createElement('a');
       link.className = 'mission-card';
-      link.href = `/mission.html?mission=${encodeURIComponent(mission.id)}`;
-      link.innerHTML = `<h2>${mission.title}</h2><p>${mission.objective}</p>`;
+      link.href = `/mission.html?mission=${encodeURIComponent(group.id)}`;
+      link.innerHTML = `<h2>${group.title}</h2><p>${defaultMission.objective}</p>`;
       container.appendChild(link);
     }
   }

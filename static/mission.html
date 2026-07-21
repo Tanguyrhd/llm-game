@@ -22,6 +22,15 @@
   }
   #briefing p { margin: 0.4rem 0; }
   #objective { color: #7fd6ff; }
+  #difficulty-select {
+    display: none;
+    margin: 0.4rem 0 0.6rem;
+    padding: 0.3rem 0.5rem;
+    border-radius: 6px;
+    border: 1px solid #333;
+    background: #1a1e26;
+    color: inherit;
+  }
   #messages {
     display: flex;
     flex-direction: column;
@@ -98,6 +107,7 @@
 
   <div id="briefing">
     <h1 id="title">Loading mission…</h1>
+    <select id="difficulty-select"></select>
     <p id="story"></p>
     <p id="objective"></p>
   </div>
@@ -121,11 +131,12 @@
   </div>
 
 <script>
-  const history = [];
+  let history = [];
   let missionSolved = false;
   let hintStage = 0;
   let missionHints = [];
   let missionAnswer = '';
+  let activeMissionId = '';
 
   const messagesEl = document.getElementById('messages');
   const formEl = document.getElementById('chat-form');
@@ -136,6 +147,7 @@
   const hintsPanelEl = document.getElementById('hints-panel');
   const hintButtonEl = document.getElementById('hint-button');
   const hintListEl = document.getElementById('hint-list');
+  const difficultySelectEl = document.getElementById('difficulty-select');
 
   function addMessage(role, content) {
     const div = document.createElement('div');
@@ -145,19 +157,60 @@
     div.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }
 
-  const missionId = new URLSearchParams(window.location.search).get('mission') || 'secret-keeper';
+  const groupId = new URLSearchParams(window.location.search).get('mission') || 'secret-keeper';
+  const DEFAULT_DIFFICULTY = 'medium';
 
-  async function loadMission() {
-    const res = await fetch(`/api/mission/${missionId}`);
-    const mission = await res.json();
+  async function loadMissionGroup() {
+    const res = await fetch('/api/mission-groups');
+    const groups = await res.json();
+    const group = groups.find((g) => g.id === groupId);
+    if (!group) {
+      document.getElementById('title').textContent = 'Mission not found';
+      return;
+    }
+
+    if (group.difficulties.length > 1) {
+      difficultySelectEl.style.display = 'inline-block';
+      difficultySelectEl.innerHTML = group.difficulties
+        .map((m) => `<option value="${m.id}">${m.difficulty}</option>`)
+        .join('');
+      const defaultMission =
+        group.difficulties.find((m) => m.difficulty === DEFAULT_DIFFICULTY) || group.difficulties[0];
+      difficultySelectEl.value = defaultMission.id;
+    }
+
+    applyMission(group.difficulties.find((m) => m.id === difficultySelectEl.value) || group.difficulties[0]);
+  }
+
+  function applyMission(mission) {
+    activeMissionId = mission.id;
     document.title = `Prompt Heist — ${mission.title}`;
     document.getElementById('title').textContent = mission.title;
     document.getElementById('story').textContent = mission.story;
     document.getElementById('objective').textContent = 'Objective: ' + mission.objective;
     missionHints = mission.hints;
     missionAnswer = mission.answer_example;
+
+    history = [];
+    missionSolved = false;
+    hintStage = 0;
+    messagesEl.innerHTML = '';
+    hintListEl.innerHTML = '';
+    bannerEl.style.display = 'none';
+    explainStatusEl.style.display = 'none';
+    hintsPanelEl.style.display = 'block';
+    inputEl.disabled = false;
+    formEl.querySelector('button').disabled = false;
     renderHintButton();
   }
+
+  difficultySelectEl.addEventListener('change', async () => {
+    const res = await fetch('/api/mission-groups');
+    const groups = await res.json();
+    const group = groups.find((g) => g.id === groupId);
+    const mission = group.difficulties.find((m) => m.id === difficultySelectEl.value);
+    applyMission(mission);
+  });
 
   function renderHintButton() {
     const labels = ['Show hint 1', 'Show hint 2', 'Show hint 3', 'Show answer'];
@@ -186,7 +239,7 @@
     history.push({ role: 'user', content: message });
     addMessage('user', message);
 
-    const res = await fetch(`/api/chat/${missionId}`, {
+    const res = await fetch(`/api/chat/${activeMissionId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ history: history.slice(0, -1), message }),
@@ -217,7 +270,7 @@
   async function fetchTailoredExplanation(winningMessage) {
     explainStatusEl.style.display = 'block';
     try {
-      const res = await fetch(`/api/explain/${missionId}`, {
+      const res = await fetch(`/api/explain/${activeMissionId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: winningMessage }),
@@ -242,7 +295,7 @@
     sendMessage(message);
   });
 
-  loadMission();
+  loadMissionGroup();
 </script>
 </body>
 </html>
