@@ -3,138 +3,108 @@
 <head>
 <meta charset="utf-8">
 <title>Prompt Heist</title>
+<link rel="stylesheet" href="style.css">
 <style>
-  body {
-    font-family: system-ui, sans-serif;
-    max-width: 640px;
-    margin: 2rem auto;
-    padding: 0 1rem;
-    background: #0f1115;
-    color: #e6e6e6;
-  }
-  h1 { font-size: 1.4rem; }
-  #briefing {
-    border: 1px solid #333;
-    border-radius: 8px;
-    padding: 1rem;
-    margin-bottom: 1.5rem;
-    background: #161a22;
-  }
+  #briefing { margin-bottom: 1.5rem; }
+  #briefing h1 { font-size: 1.8rem; margin: 0 0 0.5rem; }
   #briefing p { margin: 0.4rem 0; }
-  #objective { color: #7fd6ff; }
-  #difficulty-select {
-    display: none;
-    margin: 0.4rem 0 0.6rem;
-    padding: 0.3rem 0.5rem;
-    border-radius: 6px;
-    border: 1px solid #333;
-    background: #1a1e26;
-    color: inherit;
-  }
+  #story { color: var(--green-dim); }
+  #objective { color: var(--bright); text-shadow: 0 0 6px var(--green-glow); }
+
+  #difficulty-select { display: none; margin: 0.2rem 0 0.8rem; }
+
   #messages {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 0.35rem;
     height: 45vh;
     overflow-y: auto;
     margin-bottom: 1rem;
-    padding: 0.75rem;
-    border: 1px solid #333;
-    border-radius: 8px;
-    background: #0c0e12;
   }
   .msg {
-    padding: 0.5rem 0.75rem;
-    border-radius: 8px;
-    max-width: 80%;
     white-space: pre-wrap;
+    line-height: 1.4;
   }
-  .msg.user { align-self: flex-end; background: #2a4d7a; }
-  .msg.assistant { align-self: flex-start; background: #262a33; }
-  .msg.error { align-self: center; background: #5a2a2a; font-style: italic; }
+  .msg.user::before { content: 'YOU> '; color: var(--bright); font-weight: bold; }
+  .msg.user { color: var(--bright); }
+  .msg.assistant::before { content: 'TARGET> '; color: var(--green-dim); }
+  .msg.assistant { color: var(--green); }
+  .msg.error::before { content: 'ERROR> '; color: var(--red); }
+  .msg.error { color: var(--red); font-style: italic; }
+
   #success-banner {
     display: none;
-    border: 1px solid #3fae5a;
-    border-radius: 8px;
-    padding: 1rem;
     margin-bottom: 1rem;
-    background: #16281c;
+    border-color: var(--green);
+    box-shadow: 0 0 20px var(--green-glow), inset 0 0 30px rgba(0, 0, 0, 0.5);
   }
-  #explain-status {
-    display: none;
-    font-style: italic;
-    color: #9aa0a8;
+  #success-banner strong {
+    display: block;
+    font-family: 'VT323', monospace;
+    font-size: 1.6rem;
+    letter-spacing: 0.08em;
+    color: var(--bright);
+    text-shadow: 0 0 10px var(--green-glow);
+    margin-bottom: 0.4rem;
   }
-  #chat-form { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; }
-  #chat-input {
-    flex: 1;
-    padding: 0.5rem;
-    border-radius: 6px;
-    border: 1px solid #333;
-    background: #1a1e26;
-    color: inherit;
+  #explain-status { display: none; font-style: italic; color: var(--green-dim); }
+
+  #chat-form {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
   }
-  #chat-form button {
-    padding: 0.5rem 1rem;
-    border-radius: 6px;
-    border: none;
-    background: #2f6fdb;
-    color: white;
-    cursor: pointer;
+  #chat-form::before {
+    content: '>';
+    color: var(--green);
   }
-  #chat-form button:disabled { opacity: 0.5; cursor: not-allowed; }
-  #hints-panel {
-    border: 1px solid #333;
-    border-radius: 8px;
-    padding: 1rem;
-    background: #161a22;
-  }
-  #hint-button {
-    padding: 0.4rem 0.8rem;
-    border-radius: 6px;
-    border: 1px solid #555;
-    background: transparent;
-    color: inherit;
-    cursor: pointer;
-  }
+  #chat-input { flex: 1; }
+
+  #hints-panel button { width: 100%; margin-bottom: 0.5rem; }
   .hint {
     margin-top: 0.6rem;
     padding: 0.5rem 0.75rem;
-    border-radius: 6px;
-    background: #262a33;
+    border-left: 2px solid var(--green-dim);
+    background: rgba(0, 0, 0, 0.4);
+    color: var(--green-dim);
   }
-  .hint.answer { background: #2a2416; border: 1px solid #a88b2e; }
-  .back-link { color: #7fd6ff; }
+  .hint.answer {
+    border-left-color: var(--bright);
+    color: var(--bright);
+    text-shadow: 0 0 6px var(--green-glow);
+  }
 </style>
 </head>
 <body>
-  <p><a href="/" class="back-link">&larr; Back to missions</a></p>
+  <p><a href="/" class="back-link">&lt; return_to_grid</a></p>
 
-  <div id="briefing">
-    <h1 id="title">Loading mission…</h1>
+  <div id="briefing" class="panel">
+    <h1 id="title">Loading mission&hellip;</h1>
     <select id="difficulty-select"></select>
     <p id="story"></p>
     <p id="objective"></p>
   </div>
 
-  <div id="messages"></div>
+  <div id="messages" class="panel"></div>
 
-  <div id="success-banner">
-    <strong>Mission complete.</strong>
+  <div id="success-banner" class="panel">
+    <strong>&gt;&gt; ACCESS GRANTED</strong>
     <p id="success-explanation"></p>
-    <p id="explain-status">Analyzing your technique…</p>
+    <p id="explain-status">&gt; decrypting technique log&hellip;</p>
   </div>
 
   <form id="chat-form">
-    <input id="chat-input" type="text" placeholder="Type a message…" autocomplete="off">
+    <input id="chat-input" type="text" placeholder="enter transmission_" autocomplete="off">
     <button type="submit">Send</button>
   </form>
 
-  <div id="hints-panel">
-    <button id="hint-button" type="button">Show hint 1</button>
+  <div id="hints-panel" class="panel">
+    <button id="hint-button" type="button">Decrypt hint 1</button>
     <div id="hint-list"></div>
   </div>
 
+<script src="matrix-rain.js"></script>
 <script>
   let history = [];
   let missionSolved = false;
@@ -229,7 +199,7 @@
   });
 
   function renderHintButton() {
-    const labels = ['Show hint 1', 'Show hint 2', 'Show hint 3', 'Show answer'];
+    const labels = ['Decrypt hint 1', 'Decrypt hint 2', 'Decrypt hint 3', 'Reveal solution'];
     if (hintStage >= labels.length) {
       hintButtonEl.style.display = 'none';
       return;
