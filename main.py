@@ -5,7 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from llm import OllamaError, ask_llm
-from mission import SECRET_KEEPER, detect_secret_leak, explain_success
+from mission import MISSIONS, Mission, detect_secret_leak, explain_success
 
 app = FastAPI()
 
@@ -19,16 +19,32 @@ class MissionBriefing(BaseModel):
     answer_example: str
 
 
-@app.get("/api/mission")
-def get_mission() -> MissionBriefing:
+def _briefing(mission: Mission) -> MissionBriefing:
     return MissionBriefing(
-        id=SECRET_KEEPER.id,
-        title=SECRET_KEEPER.title,
-        story=SECRET_KEEPER.story,
-        objective=SECRET_KEEPER.objective,
-        hints=SECRET_KEEPER.hints,
-        answer_example=SECRET_KEEPER.answer_example,
+        id=mission.id,
+        title=mission.title,
+        story=mission.story,
+        objective=mission.objective,
+        hints=mission.hints,
+        answer_example=mission.answer_example,
     )
+
+
+def _get_mission_or_404(mission_id: str) -> Mission:
+    mission = MISSIONS.get(mission_id)
+    if mission is None:
+        raise HTTPException(status_code=404, detail="Mission not found")
+    return mission
+
+
+@app.get("/api/missions")
+def list_missions() -> list[MissionBriefing]:
+    return [_briefing(m) for m in MISSIONS.values()]
+
+
+@app.get("/api/mission/{mission_id}")
+def get_mission(mission_id: str) -> MissionBriefing:
+    return _briefing(_get_mission_or_404(mission_id))
 
 
 class ChatMessage(BaseModel):
@@ -47,10 +63,11 @@ class ChatResponse(BaseModel):
     explanation: str | None = None
 
 
-@app.post("/api/chat")
-def post_chat(req: ChatRequest) -> ChatResponse:
+@app.post("/api/chat/{mission_id}")
+def post_chat(mission_id: str, req: ChatRequest) -> ChatResponse:
+    mission = _get_mission_or_404(mission_id)
     messages = (
-        [{"role": "system", "content": SECRET_KEEPER.system_prompt}]
+        [{"role": "system", "content": mission.system_prompt}]
         + [m.model_dump() for m in req.history]
         + [{"role": "user", "content": req.message}]
     )
@@ -60,11 +77,11 @@ def post_chat(req: ChatRequest) -> ChatResponse:
     except OllamaError as e:
         raise HTTPException(status_code=503, detail=str(e)) from e
 
-    success = detect_secret_leak(reply, SECRET_KEEPER.secret)
+    success = detect_secret_leak(reply, mission.secret)
     return ChatResponse(
         reply=reply,
         success=success,
-        explanation=SECRET_KEEPER.success_explanation if success else None,
+        explanation=mission.success_explanation if success else None,
     )
 
 
@@ -76,9 +93,10 @@ class ExplainResponse(BaseModel):
     explanation: str
 
 
-@app.post("/api/explain")
-def post_explain(req: ExplainRequest) -> ExplainResponse:
-    return ExplainResponse(explanation=explain_success(req.message))
+@app.post("/api/explain/{mission_id}")
+def post_explain(mission_id: str, req: ExplainRequest) -> ExplainResponse:
+    mission = _get_mission_or_404(mission_id)
+    return ExplainResponse(explanation=explain_success(mission, req.message))
 
 
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
